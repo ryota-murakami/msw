@@ -28,8 +28,10 @@ import {
   ResponseResolver,
 } from './RequestHandler'
 
+type RestHandlerMethod = string | RegExp
+
 interface RestHandlerInfo {
-  method: string
+  method: RestHandlerMethod
   path: Path
 }
 
@@ -99,7 +101,7 @@ export class RestHandler<
   RestRequest<RequestParams>
 > {
   constructor(
-    method: string,
+    method: RestHandlerMethod,
     path: Path,
     resolver: ResponseResolver<any, any>,
   ) {
@@ -137,19 +139,9 @@ export class RestHandler<
       queryParams.push(paramName)
     })
 
-    devUtils.warn(`\
-Found a redundant usage of query parameters in the request handler URL for "${method} ${path}". Please match against a path instead, and access query parameters in the response resolver function:
-
-rest.${method.toLowerCase()}("${url}", (req, res, ctx) => {
-  const query = req.url.searchParams
-${queryParams
-  .map(
-    (paramName) => `\
-  const ${paramName} = query.get("${paramName}")`,
-  )
-  .join('\n')}
-})\
-      `)
+    devUtils.warn(
+      `Found a redundant usage of query parameters in the request handler URL for "${method} ${path}". Please match against a path instead and access query parameters in the response resolver function using "req.url.searchParams".`,
+    )
   }
 
   parse(request: RequestType, resolutionContext?: ResponseResolutionContext) {
@@ -171,9 +163,14 @@ ${queryParams
   }
 
   predicate(request: RequestType, parsedResult: ParsedRestRequest) {
-    return (
-      isStringEqual(this.info.method, request.method) && parsedResult.matches
-    )
+    const matchesMethod =
+      this.info.method instanceof RegExp
+        ? this.info.method.test(request.method)
+        : isStringEqual(this.info.method, request.method)
+
+    // console.log({ request, matchesMethod, parsedResult })
+
+    return matchesMethod && parsedResult.matches
   }
 
   log(request: RequestType, response: SerializedResponse) {
